@@ -1,0 +1,27 @@
+**********************
+* Special Bootloader *
+**********************
+-Compile with: make BAUD_RATE=19200 LED_START_FLASHES=5 RS485=D2 AVR_FREQ=16000000L clean atmega328
+(This is because the overall system runs in 38400 so might as well keep doing it, the send/receive of the RS485 chip is tied to D2 of the arduino)
+
+-Flash bootloader with boot flash size=256 words and High.BOOTRST enabled (0xFD, 0xDE, 0xFF) using stk500 (atmega328)
+
+-This bootloader currently checks to see if a watchdog reset was the reason it is being run.  If so, it goes back to the main program.  All other startup reasons (power on, brownout, reset button) allow it to continue running.  The arduino program knows how to jump to the bootloader when commandeded to which doesn't trigger the watchdog flag.
+
+-That means application section is from 0x0000 - 0x3EFF and bootloader section is from 0x3F00 to 0x3FFF
+(These are _word_ addresses from the AVR manual.)  The gcc tools use _byte_ addressing so multiply by two:
+	Application: 	0x0000 - 0x7DFF
+	Bootloader:		0x7E00 - 0x7FFF
+	
+-The bootloader first checks to see if the reset was due to the reset button before proceeding.  All other causes for reset cause it to exit and start the program.
+
+-The linker is told: LDSECTIONS  = -Wl,--section-start=.text=0x7e00 -Wl,--section-start=.version=0x7ffe
+That means put the text section (the main program) will start at the beginning of the bootloader and then the 2-byte version info at 0x7ffe which is the last byte of the flash.  When you compile, you get a statement for how large each section is.  Right now it's 510 of text and 2 of data which is 512 bytes = 256 words so that's the max.
+
+-The default arduino UNO uploader setting doesn't cause a remote boot with this RS-485 setup because that process uses an extra serial line (reset) that is monitored by another chip.  Our RS-485 communication path bypasses that path and goes straight to the AVR UART so we can't use that method.
+
+-To send bytes to arduino from windows command line:
+mode COM10 BAUD=38400 PARITY=n DATA=8
+sfk echo "01 02 03 04 05" +hextobin tmp1.dat
+
+-Bluetooth serial dongle: Use Com12, 38400
